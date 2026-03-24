@@ -1,4 +1,4 @@
-require('dotenv').config(); // 🔥 Top-la dhaan idhu irukkanum
+require('dotenv').config(); // 
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -56,9 +56,15 @@ const Fees = mongoose.model('Fees', new mongoose.Schema({
 // ================= MONGODB CONNECTION =================
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/boxing_club_db"; 
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("MongoDB Connected (Atlas/Local) ✅"))
-  .catch(err => console.log("MongoDB Connection Error ❌", err));
+mongoose.connect(MONGO_URI, {
+  serverSelectionTimeoutMS: 5000, 
+  autoIndex: false, 
+})
+.then(() => console.log("MongoDB Connected ✅"))
+.catch(err => {
+  console.log("Detailed Connection Error: ❌", err.message);
+  console.log("Hint: Check your IP Whitelist in MongoDB Atlas.");
+});
 
 // ================= SOCKET.IO =================
 
