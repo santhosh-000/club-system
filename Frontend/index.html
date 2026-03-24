@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elite Boxing Club | Professional Admin Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Oswald:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-red: #ff3c3c;
+            --primary-red-hover: #e63535;
+            --dark-bg: #0a0a0c;
+            --panel-bg: #141417;
+            --sidebar-bg: #111114;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-main: #ffffff;
+            --text-dim: #8e8e93;
+            --accent-green: #30d158;
+            --detroit-cyan: #00f2ff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- DETROIT BECOME HUMAN STYLE INTRO --- */
+        #intro-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: none; 
+            flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 99999;
+            transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        #intro-overlay::before {
+            content: "";
+            position: absolute;
+            width: 100%; height: 100%;
+            background: linear-gradient(0deg, transparent 0%, rgba(255, 60, 60, 0.05) 50%, transparent 100%);
+            background-size: 100% 4px;
+            animation: scanline 4s linear infinite;
+            pointer-events: none;
+        }
+
+        .intro-bg-glow {
+            position: absolute;
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(255, 60, 60, 0.15) 0%, transparent 70%);
+            filter: blur(60px);
+            animation: pulseGlow 2s infinite alternate;
+        }
+        
+        .intro-container { text-align: center; position: relative; z-index: 2; }
+        
+        .intro-logo { 
+            width: 280px; 
+            opacity: 0;
+            transform: scale(0.8) translateY(20px);
+            filter: drop-shadow(0 0 15px var(--primary-red));
+            animation: detroitEntrance 1.2s forwards cubic-bezier(0.19, 1, 0.22, 1);
+        }
+
+        .intro-text { 
+            margin-top: 35px; 
+            letter-spacing: 12px; 
+            font-family: 'Oswald', sans-serif;
+            font-weight: 300; 
+            color: #fff; 
+            text-transform: uppercase; 
+            font-size: 1.1rem; 
+            opacity: 0;
+            animation: textReveal 1s forwards 0.5s;
+            position: relative;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        @keyframes detroitEntrance {
+            0% { opacity: 0; transform: scale(0.8) translateY(30px); filter: brightness(0) blur(10px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); filter: brightness(1) blur(0px); }
+        }
+
+        @keyframes textReveal {
+            0% { opacity: 0; letter-spacing: 25px; filter: blur(10px); }
+            100% { opacity: 1; letter-spacing: 12px; filter: blur(0px); }
+        }
+
+        @keyframes pulseGlow {
+            from { transform: scale(1); opacity: 0.5; }
+            to { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        .fade-out { opacity: 0 !important; pointer-events: none; }
+
+        /* --- UI COMPONENTS --- */
+        #loginOverlay {
+            position: fixed; inset: 0; background: var(--dark-bg); z-index: 10000;
+            display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+        .login-card { background: var(--panel-bg); padding: 40px; border-radius: 16px; border: 1px solid var(--border-color); width: 380px; text-align: center; }
+        .login-logo { width: 100px; margin-bottom: 20px; }
+        .auth-toggle-link { color: var(--primary-red); cursor: pointer; font-size: 0.85rem; margin-top: 15px; display: block; text-decoration: underline; }
+
+        .top-header { height: 70px; background: var(--sidebar-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; padding: 0 32px; justify-content: space-between; z-index: 100; }
+        .header-logo-section { display: flex; align-items: center; gap: 15px; }
+        .header-logo-img { height: 40px; }
+        .header-title { font-family: 'Oswald', sans-serif; font-size: 1.5rem; letter-spacing: 2px; color: white; text-transform: uppercase; }
+        .header-title span { color: var(--primary-red); }
+        .header-status { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .status-dot { width: 8px; height: 8px; background: var(--accent-green); border-radius: 50%; box-shadow: 0 0 10px var(--accent-green); }
+
+        .app-container { display: grid; grid-template-columns: 280px 1fr 350px; width: 100%; height: calc(100vh - 70px); }
+        .sidebar { background: var(--sidebar-bg); border-right: 1px solid var(--border-color); padding: 24px; overflow-y: auto; }
+        .main-content { padding: 32px; overflow-y: auto; position: relative; background: radial-gradient(circle at top left, rgba(255, 60, 60, 0.03), transparent); }
+        .action-sidebar { background: var(--sidebar-bg); border-left: 1px solid var(--border-color); padding: 24px; overflow-y: auto; }
+
+        h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); font-weight: 600; margin-bottom: 15px; }
+        .card { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .list-item { background: var(--glass-bg); padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; border: 1px solid transparent; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+        .list-item:hover { border-color: var(--primary-red); background: rgba(255, 60, 60, 0.05); }
+        input, select { width: 100%; padding: 12px 14px; background: #1c1c21; border: 1px solid var(--border-color); border-radius: 8px; color: white; margin-bottom: 12px; font-size: 0.9rem; }
+        button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--primary-red); color: white; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button:hover { background: var(--primary-red-hover); transform: translateY(-1px); }
+
+        .student-grid { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 20px; }
+        .student-card { width: 180px; background: var(--panel-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 12px; text-align: center; cursor: pointer; transition: 0.5s ease; order: 2; }
+        .student-card.is-present { border: 2px solid var(--accent-green) !important; box-shadow: 0 0 15px rgba(48, 209, 88, 0.2); order: 1; }
+        .avatar { width: 60px; height: 60px; background: var(--glass-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 1.5rem; border: 1px solid var(--border-color); }
+
+        /* Full Page Panels */
+        #feesPage, #attStatusPage {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--dark-bg); z-index: 50; padding: 32px; display: none;
+            overflow-y: auto;
+        }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        
+        .fees-table, .status-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .fees-table th, .status-table th { text-align: left; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; padding: 12px; border-bottom: 1px solid var(--border-color); }
+        .fees-table td, .status-table td { padding: 15px 12px; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; }
+        
+        .status-btn { padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; width: auto; }
+        .btn-unpaid, .badge-absent { background: rgba(255, 60, 60, 0.1); color: var(--primary-red); border: 1px solid var(--primary-red); }
+        .btn-paid, .badge-present { background: rgba(48, 209, 88, 0.1); color: var(--accent-green); border: 1px solid var(--accent-green); }
+
+        #paymentPopup {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--panel-bg); border: 1px solid var(--primary-red);
+            padding: 30px; border-radius: 16px; z-index: 10000; display: none; width: 320px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 20px; }
+        .cal-day { aspect-ratio: 1; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: var(--text-dim); }
+        .cal-day.present { background: var(--accent-green); color: black; font-weight: 700; }
+
+        .video-container { position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: #000; border: 1px solid var(--border-color); margin-bottom: 16px; }
+        video, .remote-view { width: 100%; display: block; transform: scaleX(-1); background: #000; min-height: 180px; }
+        .cam-toggle { position: absolute; top: 10px; right: 10px; z-index: 10; width: auto; font-size: 0.7rem; padding: 4px 8px; background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); }
+        .delete-btn { width: auto; padding: 4px 8px; background: transparent; color: var(--text-dim); font-size: 1.2rem; line-height: 1; }
+        .delete-btn:hover { color: var(--primary-red); }
+        
+        .logout-btn { background: transparent; color: var(--text-dim); border: 1px solid var(--border-color); padding: 5px 15px; font-size: 0.7rem; width: auto; margin-left: 20px; }
+        .logout-btn:hover { color: var(--primary-red); border-color: var(--primary-red); }
+    </style>
+</head>
+
+<body>
+
+<div id="loginOverlay">
+    <div class="login-card">
+        <img src="/Frontend/stocks/logo.png" class="login-logo" alt="Logo">
+        <div id="loginForm">
+            <h2 style="font-family: 'Oswald'; letter-spacing: 2px; margin-bottom: 20px;">ADMIN <span>LOGIN</span></h2>
+            <input type="text" id="adminUser" placeholder="Username">
+            <input type="password" id="adminPass" placeholder="Password">
+            <button onclick="handleAdminLogin()">AUTHENTICATE</button>
+            <p id="loginError" style="color: var(--primary-red); font-size: 0.8rem; margin-top: 15px; display: none;">Invalid Credentials</p>
+            <span class="auth-toggle-link" onclick="toggleAuthMode('register')" style="text-decoration: none;">Don't have an account? Create one</span>
+        </div>
+        <div id="registerForm" style="display: none;">
+            <h2 style="font-family: 'Oswald'; letter-spacing: 2px; margin-bottom: 20px;">CREATE <span>ACCOUNT</span></h2>
+            <input type="text" id="regUser" placeholder="New Username">
+            <input type="password" id="regPass" placeholder="New Password">
+            <button onclick="handleAdminRegister()" style="background: var(--accent-green);">REGISTER ADMIN</button>
+            <span class="auth-toggle-link" onclick="toggleAuthMode('login')" style="text-decoration: none;">Already have an account? Login</span>
+        </div>
+    </div>
+</div>
+
+<div id="intro-overlay">
+    <div class="intro-bg-glow"></div>
+    <div class="intro-container">
+        <img src="/Frontend/stocks/logo.png" class="intro-logo" alt="Logo">
+        <div class="intro-text">Elite Boxing Systems </div>
+    </div>
+</div>
+
+<audio id="sndValid" src="/Frontend/stocks/Valid.mp3" preload="auto"></audio>  
+<audio id="sndWarning" src="/Frontend/stocks/Re-entry.mp3.mpeg" preload="auto"></audio> 
+<audio id="sndMismatch" src="/Frontend/stocks/Mismatch.mp3" preload="auto"></audio>
+
+
+<header class="top-header">
+    <div class="header-logo-section">
+        <img src="/Frontend/stocks/logo.png" class="header-logo-img" alt="Logo">
+        <h1 class="header-title">BOXING <span>CLUB</span></h1>
+        <button class="logout-btn" onclick="handleLogout()">LOGOUT</button>
+    </div>
+    <div class="header-status">
+        <div class="status-dot"></div> System Active
+    </div>
+</header>
+
+<div class="app-container">
+    <aside class="sidebar">
+        <h3>Batches</h3>
+        <input type="text" id="batchName" placeholder="Batch title...">
+        <button onclick="createBatch()">New Batch</button>
+        <div id="batchList" style="margin-top: 20px;"></div>
+        <div style="margin-top: 30px;">
+            <h3>Students List</h3>
+            <div id="studentList"></div>
+        </div>
+    </aside>
+
+    <main class="main-content" id="centerPanel">
+        <div id="welcomeView">
+            <h1 style="font-size: 2.5rem; font-weight: 700;">Boxing Admin Console</h1>
+            <p style="color: var(--text-dim);">Select a batch to start.</p>
+        </div>
+
+        <div id="dynamicView" style="display: none;">
+            <div id="batchOverview">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 id="currentBatchTitle" style="font-size: 2rem; color: var(--primary-red);">Batch Name</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="openFeesPage()" style="width: auto; padding: 8px 20px; background: var(--glass-bg); border: 1px solid var(--primary-red);">📊 View Fees</button>
+                        <button onclick="openAttStatusPage()" style="width: auto; padding: 8px 20px; background: var(--glass-bg); border: 1px solid var(--accent-green);">📅 Att Status</button>
+                    </div>
+                </div>
+                <div class="student-grid" id="studentDirectory"></div>
+            </div>
+
+            <div id="profileView" style="display: none;">
+                <button onclick="backToDirectory()" style="width: auto; background: transparent; color: var(--text-dim); margin-bottom: 15px;">&larr; Back</button>
+                <h1 id="detailName" style="font-size: 2.5rem; font-weight: 700;">Student Name</h1>
+                <span id="detailAge" style="color: var(--text-dim); display: block; margin-bottom: 20px;">AGE: --</span>
+                <div class="card">
+                    <h3>Attendance History</h3>
+                    <div style="display:flex; gap:8px; margin-bottom: 10px;">
+                        <select id="monthSelect" onchange="updateCalendar()"></select>
+                        <select id="yearSelect" onchange="updateCalendar()"></select>
+                    </div>
+                    <div class="calendar-grid" id="attendanceCalendar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="feesPage">
+            <div class="page-header">
+                <div>
+                    <h1 id="feesBatchTitle" style="font-size: 1.8rem;">Fees Management</h1>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                        <select id="feeMonthSelect" onchange="renderFeesList()" style="width: auto; margin-bottom: 0; padding: 5px 10px;"></select>
+                        <select id="feeYearSelect" onchange="renderFeesList()" style="width: auto; margin-bottom: 0; padding: 5px 10px;"></select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="downloadFeesExcel()" style="width: auto; background-color: #8e8e93;">Download Excel</button>
+                    <button onclick="closeFeesPage()" style="width: auto; background: var(--primary-red);">Close Page</button>
+                </div>
+            </div>
+            <div class="card">
+                <table class="fees-table" id="feesTable">
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>Status</th>
+                            <th>Payment Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="feesTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="attStatusPage">
+            <div class="page-header">
+                <div>
+                    <h1 style="font-size: 1.8rem;">Attendance Records</h1>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                        <input type="date" id="attStatusDatePicker" onchange="renderAttendanceStatusList()" style="width: auto; margin-bottom: 0;">
+                    </div>
+                </div>
+                <button onclick="closeAttStatusPage()" style="width: auto; background: var(--primary-red);">Close Page</button>
+            </div>
+            <div class="card">
+                <table class="status-table">
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>Batch Position</th>
+                            <th>Daily Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attStatusTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <aside class="action-sidebar">
+        <div class="card" style="border: 1px solid var(--primary-red);">
+            <h3>Camera Source Control</h3>
+            <select id="globalCamSource" onchange="unifiedCamSourceSwitch()" style="margin-bottom: 0; border-color: var(--primary-red); background: rgba(255, 60, 60, 0.1);">
+                <option value="webcam">🌐 Use System Webcam</option>
+                <option value="mobile">📱 Use Remote Mobile Cam</option>
+            </select>
+        </div>
+
+        <div class="card">
+            <h3>Registration</h3>
+            <input type="text" id="studentName" placeholder="Full Name">
+            <input type="number" id="studentAge" placeholder="Age">
+            <div class="video-container">
+                <button class="cam-toggle" onclick="toggleCamera('video', this)" id="regCamBtn">OFF</button>
+                <video id="video" autoplay muted></video>
+                <img id="regRemoteView" class="remote-view" style="display: none;">
+            </div>
+            <button onclick="captureAndAddStudent()">📸 Enroll Student</button>
+        </div>
+
+        <div class="card" style="border-color: var(--primary-red);">
+            <h3>Neural Identity Scanner</h3>
+            <div class="video-container">
+                <button class="cam-toggle" onclick="toggleCamera('attendanceVideo', this)" id="attCamBtn">OFF</button>
+                <video id="attendanceVideo" autoplay muted></video>
+                <img id="remoteView" class="remote-view" style="display: none;">
+            </div>
+            <p id="statusMsg" style="text-align:center; font-size:0.7rem; margin-top:10px; color:var(--text-dim);">Ready...</p>
+            <p id="autoScanStatus" style="text-align:center; font-size:0.8rem; color:var(--accent-green); font-weight:600; margin-top:5px;">AI Auto-Scanner Active 🔍</p>
+        </div>
+    </aside>
+</div>
+
+<div id="paymentPopup">
+    <h3 style="color: white;">Mark as Paid</h3>
+    <p style="font-size: 0.8rem; margin-bottom: 10px; color: var(--text-dim);">Select payment date:</p>
+    <input type="date" id="paymentDateInput">
+    <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button onclick="confirmPayment()" style="background: var(--accent-green);">Confirm</button>
+        <button onclick="closePaymentPopup()" style="background: var(--glass-bg);">Cancel</button>
+    </div>
+</div>
+
+<script>
+const API_URL = "http://localhost:5000";
+let batches = [];
+let selectedBatch = null;
+let selectedStudent = null;
+let targetFeeStudentId = null;
+let streams = { video: null, attendanceVideo: null };
+let socket = null;
+let isScanning = false;
+
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+
+window.addEventListener('DOMContentLoaded', () => {
+    const isLoggedIn = localStorage.getItem("adminLoggedIn");
+    if (isLoggedIn === "true") {
+        playDetroitIntro(); 
+    } else {
+        document.getElementById("loginOverlay").style.display = "flex";
+    }
+});
+
+function playDetroitIntro() {
+    const intro = document.getElementById("intro-overlay");
+    intro.style.display = "flex";
+    initApp();
+    
+    setTimeout(() => { 
+        intro.classList.add('fade-out'); 
+        setTimeout(() => { intro.style.display = "none"; }, 1000);
+    }, 2500); 
+}
+
+function toggleAuthMode(mode) {
+    document.getElementById("loginForm").style.display = (mode === 'login') ? 'block' : 'none';
+    document.getElementById("registerForm").style.display = (mode === 'register') ? 'block' : 'none';
+    document.getElementById("loginError").style.display = 'none';
+}
+
+function enterSystem() {
+    localStorage.setItem("adminLoggedIn", "true"); 
+    document.getElementById("loginOverlay").style.display = "none";
+    playDetroitIntro();
+}
+
+async function handleAdminLogin() {
+    const user = document.getElementById("adminUser").value;
+    const pass = document.getElementById("adminPass").value;
+    try {
+        const res = await fetch(`${API_URL}/login-admin`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ username: user, password: pass })
+        });
+        const data = await res.json();
+        if (data.success) { enterSystem(); } 
+        else {
+            document.getElementById("loginError").style.display = "block";
+            document.getElementById("loginError").innerText = "Invalid Username or Password";
+        }
+    } catch (e) { alert("Server Connection Failed!"); }
+}
+
+async function handleAdminRegister() {
+    const user = document.getElementById("regUser").value;
+    const pass = document.getElementById("regPass").value;
+    if(!user || !pass) return alert("Fill all details");
+    try {
+        const res = await fetch(`${API_URL}/register-admin`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ username: user, password: pass })
+        });
+        const data = await res.json();
+        if (data.success) { enterSystem(); } 
+        else { alert(data.message || "Registration Failed"); }
+    } catch (e) { alert("Server Error during registration"); }
+}
+
+function handleLogout() {
+    if(confirm("Are you sure you want to logout?")) {
+        localStorage.removeItem("adminLoggedIn");
+        location.reload();
+    }
+}
+
+function initApp() {
+    initAI(); initSocket(); startCamera("video"); startCamera("attendanceVideo");
+    initMonthYearSelectors(); loadBatches();
+    document.getElementById("attStatusDatePicker").valueAsDate = new Date();
+}
+
+function initSocket() {
+    socket = io(API_URL);
+    socket.on("mobile_frame", (data) => {
+        const source = document.getElementById("globalCamSource").value;
+        if(source === "mobile") {
+            document.getElementById("remoteView").src = data.image;
+            document.getElementById("regRemoteView").src = data.image;
+        }
+    });
+}
+
+function unifiedCamSourceSwitch() {
+    const source = document.getElementById("globalCamSource").value;
+    const elements = [
+        { v: "attendanceVideo", r: "remoteView", b: "attCamBtn" },
+        { v: "video", r: "regRemoteView", b: "regCamBtn" }
+    ];
+    elements.forEach(el => {
+        const video = document.getElementById(el.v);
+        const remote = document.getElementById(el.r);
+        const btn = document.getElementById(el.b);
+        if(source === "mobile") {
+            stopCamera(el.v);
+            video.style.display = "none";
+            remote.style.display = "block";
+            btn.style.display = "none";
+            document.getElementById("statusMsg").innerText = "Waiting for Mobile Cam...";
+        } else {
+            video.style.display = "block";
+            remote.style.display = "none";
+            btn.style.display = "block";
+            startCamera(el.v);
+        }
+    });
+}
+
+async function initAI() {
+    try {
+        const MODEL_URL = "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights/";
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        document.getElementById("statusMsg").innerText = "Neural Engine Active ✅";
+        startContinuousScanning();
+    } catch(e) { document.getElementById("statusMsg").innerText = "AI Offline"; }
+}
+
+async function startContinuousScanning() {
+    setInterval(async () => {
+        if (isScanning || !selectedBatch) return;
+        const source = document.getElementById("globalCamSource").value;
+        const inputSource = (source === "mobile") ? document.getElementById("remoteView") : document.getElementById("attendanceVideo");
+        if (source === "webcam" && (!streams["attendanceVideo"])) return;
+        if (source === "mobile" && (!inputSource.src || inputSource.src.includes('undefined'))) return;
+        isScanning = true;
+        await autoMarkAttendance(inputSource);
+        isScanning = false;
+    }, 2000); 
+}
+
+async function autoMarkAttendance(inputSource) {
+    const detection = await faceapi.detectSingleFace(inputSource, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+    if(!detection) { document.getElementById("statusMsg").innerText = "Scanning..."; return; }
+    
+    let bestMatch = null; 
+    let minDistance = 0.45;
+    let matchingBatchId = null;
+    let matchingBatchName = "";
+
+    for(let b of batches) {
+        if(!b.students) continue; 
+        for(let s of b.students) {
+            if(!s.face_data) continue;
+            const dist = faceapi.euclideanDistance(detection.descriptor, new Float32Array(JSON.parse(s.face_data)));
+            if(dist < minDistance) { 
+                minDistance = dist; 
+                bestMatch = s; 
+                matchingBatchId = b.id;
+                matchingBatchName = b.batch_name;
+            }
+        }
+    }
+
+    if (bestMatch) {
+        if (String(matchingBatchId) !== String(selectedBatch.id)) {
+            document.getElementById('sndMismatch').play();
+            document.getElementById("statusMsg").innerText = `WRONG BATCH: ${bestMatch.student_name} belongs to ${matchingBatchName}`;
+            return;
+        }
+
+        const ts = localStorage.getItem(`presence_ts_${bestMatch.id}`);
+        const twentyHours = 20 * 60 * 60 * 1000;
+        if (ts && (Date.now() - ts < twentyHours)) {
+            document.getElementById('sndWarning').play();
+            document.getElementById("statusMsg").innerText = `${bestMatch.student_name}: Already Present`;
+            const card = document.getElementById(`card-${bestMatch.id}`);
+            if(card) applyPresenceUI(card, bestMatch.id); 
+            return;
+        }
+
+        const res = await fetch(`${API_URL}/mark-attendance-face`, { 
+            method: "POST", headers: {"Content-Type": "application/json"}, 
+            body: JSON.stringify({ student_id: bestMatch.id }) 
+        });
+        const data = await res.json();
+        
+        const card = document.getElementById(`card-${bestMatch.id}`);
+
+        if (data.success) {
+            document.getElementById('sndValid').play();
+            document.getElementById("statusMsg").innerText = `Marked: ${bestMatch.student_name} ✅`;
+            applyPresenceUI(card, bestMatch.id);
+        } else if (data.message.includes("already marked")) {
+            document.getElementById('sndWarning').play();
+            document.getElementById("statusMsg").innerText = `${bestMatch.student_name}: Already Scanned`;
+            applyPresenceUI(card, bestMatch.id);
+        }
+    } else { 
+        document.getElementById("statusMsg").innerText = "Unknown Face"; 
+    }
+}
+
+function applyPresenceUI(card, id) {
+    if(!card) return;
+    const timestampKey = `presence_ts_${id}`;
+    if(!localStorage.getItem(timestampKey)) {
+        localStorage.setItem(timestampKey, Date.now()); 
+    }
+    card.classList.add('is-present');
+    const directory = document.getElementById('studentDirectory');
+    directory.prepend(card); 
+}
+
+function checkPresenceExpiry() {
+    const cards = document.querySelectorAll('.student-card');
+    const twentyHours = 20 * 60 * 60 * 1000;
+    const now = Date.now();
+    cards.forEach(card => {
+        const id = card.id.replace('card-', '');
+        const ts = localStorage.getItem(`presence_ts_${id}`);
+        if (ts && (now - ts < twentyHours)) {
+            card.classList.add('is-present');
+            const directory = document.getElementById('studentDirectory');
+            if(directory) directory.prepend(card);
+        } else {
+            card.classList.remove('is-present');
+            localStorage.removeItem(`presence_ts_${id}`);
+        }
+    });
+}
+
+// Attendance Status Page Logic
+async function openAttStatusPage() {
+    if(!selectedBatch) return;
+    document.getElementById("attStatusPage").style.display = "block";
+    renderAttendanceStatusList();
+}
+
+function closeAttStatusPage() {
+    document.getElementById("attStatusPage").style.display = "none";
+}
+
+async function renderAttendanceStatusList() {
+    const tableBody = document.getElementById("attStatusTableBody");
+    const dateInput = document.getElementById("attStatusDatePicker").value;
+    if(!selectedBatch || !dateInput) return;
+
+    // Split date to get day, month, year
+    const d = new Date(dateInput);
+    const day = d.getDate();
+    const month = d.getMonth() + 1;
+    const year = d.getFullYear();
+
+    tableBody.innerHTML = "<tr><td colspan='3' style='text-align:center;'>Loading Data...</td></tr>";
+
+    try {
+        // We fetch attendance for the entire batch for that specific date
+        // Logic: Students in selectedBatch vs Students who have a "Present" record in DB for this date
+        const res = await fetch(`${API_URL}/get-batch-attendance-date/${selectedBatch.id}/${day}/${month}/${year}`);
+        const data = await res.json();
+        
+        if(data.success) {
+            // data.records will contain a list of student IDs who were present
+            const presentIds = data.records.map(r => String(r.student_id));
+            
+            tableBody.innerHTML = selectedBatch.students.map((s, index) => {
+                const isPresent = presentIds.includes(String(s.id));
+                return `
+                    <tr>
+                        <td>👤 ${s.student_name}</td>
+                        <td style="color: var(--text-dim);"># ${index + 1}</td>
+                        <td>
+                            <span class="status-btn ${isPresent ? 'badge-present' : 'badge-absent'}">
+                                ${isPresent ? 'PRESENT' : 'ABSENT'}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+        }
+    } catch (e) {
+        tableBody.innerHTML = "<tr><td colspan='3' style='color: var(--primary-red);'>Error loading records.</td></tr>";
+    }
+}
+
+async function startCamera(id){
+    try {
+        const video = document.getElementById(id);
+        if(!video) return;
+        const stream = await navigator.mediaDevices.getUserMedia({video:true});
+        video.srcObject = stream; streams[id] = stream;
+        const btn = video.parentElement.querySelector('.cam-toggle');
+        if(btn) btn.innerText = "ON";
+    } catch(e) { console.log("Camera denied"); }
+}
+
+function stopCamera(id) {
+    if (streams[id]) {
+        streams[id].getTracks().forEach(track => track.stop());
+        document.getElementById(id).srcObject = null; streams[id] = null;
+        const btn = document.getElementById(id).parentElement.querySelector('.cam-toggle');
+        if(btn) btn.innerText = "OFF";
+    }
+}
+function toggleCamera(id, btn) { streams[id] ? stopCamera(id) : startCamera(id); }
+
+async function loadBatches(){
+    const res = await fetch(`${API_URL}/get-batches`);
+    const data = await res.json(); 
+    batches = data.batches;
+    for(let b of batches) {
+        const sRes = await fetch(`${API_URL}/get-students/${b.id}`);
+        const sData = await sRes.json();
+        b.students = sData.students;
+    }
+    document.getElementById("batchList").innerHTML = batches.map((b,i)=>`<div class="list-item" onclick="selectBatch(${i})"><span>🥊 ${b.batch_name}</span><button class="delete-btn" onclick="deleteBatch(event, '${b.id}')">&times;</button></div>`).join("");
+}
+
+async function selectBatch(i){
+    selectedBatch = batches[i];
+    document.getElementById("welcomeView").style.display = "none";
+    document.getElementById("dynamicView").style.display = "block";
+    document.getElementById("currentBatchTitle").innerText = selectedBatch.batch_name;
+    loadStudents();
+}
+
+async function loadStudents(){
+    const directory = document.getElementById("studentDirectory");
+    directory.innerHTML = "";
+    document.getElementById("studentList").innerHTML = selectedBatch.students.map((s)=>`<div class="list-item" onclick="showStudentDetailsById('${s.id}')"><span>👤 ${s.student_name}</span><button class="delete-btn" onclick="deleteStudent(event, '${s.id}')">&times;</button></div>`).join("");
+    selectedBatch.students.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'student-card';
+        card.id = `card-${s.id}`;
+        card.onclick = () => showStudentDetailsById(s.id);
+        card.innerHTML = `<div class="avatar">👤</div><div style="font-weight: 600;">${s.student_name}</div><div style="font-size: 0.8rem; color: var(--text-dim);">Age: ${s.student_age}</div>`;
+        directory.appendChild(card);
+    });
+    checkPresenceExpiry(); 
+}
+
+async function deleteStudent(e, id) {
+    e.stopPropagation();
+    if(!confirm("Delete student?")) return;
+    const res = await fetch(`${API_URL}/delete-student/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if(data.success) {
+        const bIdx = batches.findIndex(b => b.id === selectedBatch.id);
+        await loadBatches();
+        if(bIdx !== -1) selectBatch(bIdx);
+    }
+}
+
+function openFeesPage() {
+    if(!selectedBatch) return;
+    document.getElementById("feesPage").style.display = "block";
+    document.getElementById("feesBatchTitle").innerText = selectedBatch.batch_name + " - Fees";
+    document.getElementById("feeMonthSelect").value = currentMonth + 1;
+    document.getElementById("feeYearSelect").value = currentYear;
+    renderFeesList();
+}
+
+function closeFeesPage() { document.getElementById("feesPage").style.display = "none"; }
+
+async function renderFeesList() {
+    const tableBody = document.getElementById("feesTableBody");
+    if(!selectedBatch) return;
+    const fMonth = document.getElementById("feeMonthSelect").value;
+    const fYear = document.getElementById("feeYearSelect").value;
+    const res = await fetch(`${API_URL}/get-fees-status/${selectedBatch.id}/${fMonth}/${fYear}`);
+    const data = await res.json();
+    if(data.success) {
+        tableBody.innerHTML = data.fees.map(s => {
+            const isPaid = s.status === 'Paid';
+            const displayDate = s.paid_date ? s.paid_date : '--';
+            return `<tr><td>${s.student_name}</td><td><button class="status-btn ${isPaid ? 'btn-paid' : 'btn-unpaid'}" onclick="handleFeeClick('${s.id}', '${displayDate}')">${isPaid ? 'PAID' : 'UNPAID'}</button></td><td style="color: var(--accent-green);">${isPaid ? displayDate : '--'}</td></tr>`;
+        }).join("");
+    }
+}
+
+function downloadFeesExcel() {
+    const table = document.getElementById("feesTable");
+    const ws = XLSX.utils.table_to_sheet(table);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Fees");
+    XLSX.writeFile(wb, `Fees_Record_${selectedBatch.batch_name}.xlsx`);
+}
+
+function handleFeeClick(id, date) {
+    if(date !== '--') { alert("Already paid on: " + date); } 
+    else { targetFeeStudentId = id; document.getElementById("paymentPopup").style.display = "block"; document.getElementById("paymentDateInput").valueAsDate = new Date(); }
+}
+
+async function confirmPayment() {
+    const res = await fetch(`${API_URL}/mark-fees-paid`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ 
+            student_id: targetFeeStudentId, 
+            month: document.getElementById("feeMonthSelect").value, 
+            year: document.getElementById("feeYearSelect").value, 
+            paid_date: document.getElementById("paymentDateInput").value, 
+            amount: 0 
+        })
+    });
+    const data = await res.json();
+    if(data.success) { closePaymentPopup(); renderFeesList(); }
+}
+
+function closePaymentPopup() { document.getElementById("paymentPopup").style.display = "none"; }
+
+function showStudentDetailsById(id) { 
+    const idx = selectedBatch.students.findIndex(s => s.id === id); 
+    if(idx !== -1) showStudentDetails(idx); 
+}
+
+function showStudentDetails(i){
+    selectedStudent = selectedBatch.students[i];
+    document.getElementById("batchOverview").style.display = "none";
+    document.getElementById("profileView").style.display = "block";
+    document.getElementById("detailName").innerText = selectedStudent.student_name;
+    document.getElementById("detailAge").innerText = `AGE: ${selectedStudent.student_age}`;
+    generateCalendar();
+}
+
+function backToDirectory() { document.getElementById("batchOverview").style.display = "block"; document.getElementById("profileView").style.display = "none"; }
+
+function initMonthYearSelectors(){
+    const monthNames=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const mSelects = [document.getElementById("monthSelect"), document.getElementById("feeMonthSelect")];
+    const ySelects = [document.getElementById("yearSelect"), document.getElementById("feeYearSelect")];
+    mSelects.forEach(ms => { if(ms) { ms.innerHTML = monthNames.map((m,i)=>`<option value="${i+1}">${m}</option>`).join(""); ms.value = currentMonth + 1; } });
+    ySelects.forEach(ys => { if(ys) { ys.innerHTML = ""; for(let y=currentYear-2; y<=currentYear+2; y++) ys.innerHTML+=`<option value="${y}">${y}</option>`; ys.value = currentYear; } });
+}
+
+function updateCalendar(){ 
+    currentMonth = parseInt(document.getElementById("monthSelect").value) - 1; 
+    currentYear = parseInt(document.getElementById("yearSelect").value); 
+    generateCalendar(); 
+}
+
+async function generateCalendar(){
+    const calendar = document.getElementById("attendanceCalendar");
+    calendar.innerHTML = "";
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    let attendanceData = {};
+    if(selectedStudent){
+        const res = await fetch(`${API_URL}/get-attendance/${selectedStudent.id}/${currentMonth+1}/${currentYear}`);
+        const data = await res.json();
+        if(data.success) {
+            data.attendance.forEach(a => { 
+                const d = new Date(a.attendance_date).getDate();
+                attendanceData[d] = a.status; 
+            });
+        }
+    }
+    for(let d=1; d<=daysInMonth; d++){
+        let div = document.createElement("div"); 
+        div.className = "cal-day"; 
+        div.innerText = d;
+        if(attendanceData[d] === "Present") div.classList.add("present");
+        calendar.appendChild(div);
+    }
+}
+
+async function captureAndAddStudent(){
+    const name = document.getElementById("studentName").value;
+    const age = document.getElementById("studentAge").value;
+    if(!selectedBatch || !name || !age) return alert("Fill all details & Select Batch!");
+    const source = document.getElementById("globalCamSource").value;
+    const input = (source === "mobile") ? document.getElementById("regRemoteView") : document.getElementById("video");
+    const det = await faceapi.detectSingleFace(input, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+    if(!det) return alert("Face not detected! Adjust camera.");
+    const res = await fetch(`${API_URL}/add-student`, { 
+        method: "POST", 
+        headers: {"Content-Type": "application/json"}, 
+        body: JSON.stringify({ 
+            batch_id: selectedBatch.id, 
+            student_name: name, 
+            student_age: age, 
+            face_data: JSON.stringify(Array.from(det.descriptor)) 
+        }) 
+    });
+    const data = await res.json();
+    if(data.success) {
+        alert("Enrolled Successfully ✅"); 
+        document.getElementById("studentName").value = "";
+        document.getElementById("studentAge").value = "";
+        await loadBatches(); 
+        const currentBatchIndex = batches.findIndex(b => b.id === selectedBatch.id);
+        if(currentBatchIndex !== -1) {
+            selectBatch(currentBatchIndex);
+        }
+    }
+}
+
+async function createBatch(){
+    const name = document.getElementById("batchName").value;
+    if(!name) return;
+    await fetch(`${API_URL}/create-batch`, { 
+        method: "POST", 
+        headers: {"Content-Type": "application/json"}, 
+        body: JSON.stringify({batch_name: name}) 
+    });
+    document.getElementById("batchName").value = ""; 
+    loadBatches();
+}
+
+async function deleteBatch(e, id){
+    e.stopPropagation();
+    if(!confirm("Delete this batch and all its students?")) return;
+    await fetch(`${API_URL}/delete-batch/${id}`, { method: "DELETE" }); 
+    loadBatches();
+    if(selectedBatch && selectedBatch.id == id) {
+        selectedBatch = null;
+        document.getElementById("welcomeView").style.display = "block";
+        document.getElementById("dynamicView").style.display = "none";
+    }
+}
+</script>
+</body>
+</html>
